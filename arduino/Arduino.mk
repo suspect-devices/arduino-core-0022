@@ -41,7 +41,7 @@
 #
 #       ARDUINO_LIBS = Ethernet Ethernet/utility SPI
 #       MCU    = atmega2560
-#       ISP_PORT =   /dev/cu.usbmodem12a1
+#       AVRDUDE_PORT =   /dev/cu.usbmodem12a1
 #
 #       include /usr/local/share/Arduino.mk
 #
@@ -51,7 +51,7 @@
 #                   assume these are in
 #                   $(ARDUINO_DIR)/hardware/libraries 
 #
-#    ISP_PORT - The port where the Arduino can be found (only needed
+#    AVRDUDE_PORT - The port where the Arduino can be found (only needed
 #                   when uploading
 #
 #    MCU    -  the name of the processor
@@ -82,8 +82,8 @@
 # You need to specify some details of your ISP programmer and might
 # also need to specify the fuse values:
 #
-#     ISP_PROG	   = -c stk500v2
-#     ISP_PORT     = /dev/ttyACM0
+#     AVRDUDE_PROGRAMMER	   = -c stk500v2
+#     AVRDUDE_PORT     = /dev/ttyACM0
 #
 # You might also need to set the fuse bits, but typically they'll be
 #     
@@ -132,18 +132,18 @@ endif
 UNAME := $(shell uname -s)
 
 ifeq ($(UNAME),Darwin)
-    ifndef ISP_PORT
-        ISP_PORT=$(firstword $(wildcard /dev/tty.usbmodem*))
+    ifndef AVRDUDE_PORT
+        AVRDUDE_PORT=$(firstword $(wildcard /dev/tty.usbmodem*))
     endif
 else 
 ifeq ($(UNAME),Linux)
-    ifndef ISP_PORT
-        ISP_PORT=/dev/ttyACM0
+    ifndef AVRDUDE_PORT
+        AVRDUDE_PORT=/dev/ttyACM0
     endif
 else
 	UNAME=Windows
-    ifndef ISP_PORT
-        ISP_PORT=COM8:
+    ifndef AVRDUDE_PORT
+        AVRDUDE_PORT=COM8:
     endif
 endif
 endif
@@ -209,12 +209,12 @@ F_CPU = 16000000
 endif
 
 # normal programming info
-ifndef AVRDUDE_ARD_PROGRAMMER
-AVRDUDE_ARD_PROGRAMMER = stk500v2
+ifndef AVRDUDE_PROGRAMMER
+AVRDUDE_PROGRAMMER = stk500v2
 endif
 
-ifndef AVRDUDE_ARD_BAUDRATE
-AVRDUDE_ARD_BAUDRATE = 115200
+ifndef AVRDUDE_BAUDRATE
+AVRDUDE_BAUDRATE = 115200
 endif
 
 # fuses if you're using e.g. ISP
@@ -339,7 +339,7 @@ ASFLAGS       = -mmcu=$(MCU) -I. -x assembler-with-cpp
 LDFLAGS       = -mmcu=$(MCU) -Wl,--gc-sections -Os
 
 # Expand and pick the first port
-# ARD_PORT      = $(firstword $(wildcard $(ISP_PORT)))
+# ARD_PORT      = $(firstword $(wildcard $(AVRDUDE_PORT)))
 
 # Implicit rules for building everything (needed to get everything in
 # the right directory)
@@ -446,13 +446,13 @@ ifdef AVRDUDE_CONF
 AVRDUDE_COM_OPTS += -C $(AVRDUDE_CONF)
 endif
 
-AVRDUDE_ARD_OPTS = -c $(AVRDUDE_ARD_PROGRAMMER) -b $(AVRDUDE_ARD_BAUDRATE) -P $(ISP_PORT)
+AVRDUDE_ARD_OPTS = -c $(AVRDUDE_PROGRAMMER) -b $(AVRDUDE_BAUDRATE) -P $(AVRDUDE_PORT)
 
-ifndef ISP_PROG
-ISP_PROG	   = -c stk500v2
+ifndef AVRDUDE_PROGRAMMER
+AVRDUDE_PROGRAMMER	   = -c stk500v2
 endif
 
-AVRDUDE_ISP_OPTS = -P $(ISP_PORT) $(ISP_PROG)
+AVRDUDE_ISP_OPTS = -P $(AVRDUDE_PORT) $(AVRDUDE_PROGRAMMER)
 
 
 ########################################################################
