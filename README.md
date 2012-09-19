@@ -12,4 +12,4 @@ created by Martin Oldfield which can be found at https://github.com/mjoldfield/A
 Between the core and the makefile is a usable library based system. 
 
 I have a trivial example and a not so trivial example in which 5 pdes were munged into a single source file 
-(which once you have a sane editor is not so bad)
+(which once you have a sane editor is not so bad, mostly I needed to fix this program)
