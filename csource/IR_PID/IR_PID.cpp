@@ -1,6 +1,10 @@
 //------------------------------------------------------------------------
 // Single file IR_PID 
 //
+// Minor cleanup by Donald Delmar Davis, don@suspectdevice.som
+//
+// Added safety. If temp sensor times out turn off the burner. 
+// 
 // IR_PID - Main File
 // PID Controller for a Hot Plate for Surface Mount Soldering.
 //  Scott Dixon & Jim Larson
@@ -49,12 +53,15 @@
 
 
 #include <avr/EEPROM.h>
+#include <avr/pgmspace.h>
+#include <stdio.h>
 #include "WProgram.h"
 
 void setup();
 void setTargetTemp(float t);
 float getTargetTemp();
 void loop();
+int to2d(float f);
 float readFloat(int address);
 void writeFloat(float value, int address);
 void setupPID(unsigned int padd, int iadd, int dadd);
@@ -76,7 +83,6 @@ void printHelp();
 void updateSerialInterface();
 void printStatus();
 void printStatusForGraph();
-void printFloat(float value, int places);
 void setupTempSensor();
 void updateTempSensor();
 void readBit();
@@ -148,6 +154,15 @@ void setupPID(unsigned int padd, int iadd, int dadd) {
     pgain = readFloat(pgainAddress);
     igain = readFloat(igainAddress);
     dgain = readFloat(dgainAddress);
+    unsigned char *checkBytes = (unsigned char *)((void *)&pgain);
+    if (checkBytes[0]==0xff && checkBytes[1]==0xff && checkBytes[2]==0xff && checkBytes[3]==0xff) {
+        // uninitialized eeprom set reasonable defaults
+        setP(30.0); // make sure to keep the decimal point on these values
+        setI(0.0);  // make sure to keep the decimal point on these values
+        setD(0.0);  // make sure to keep the decimal point on these values
+        setTargetTemp(0.0); // target temp should be something safe.
+    }
+        
 }
 
 float getP() {
@@ -231,17 +246,11 @@ float updatePID(float targetTemp, float curTemp)
 
 void printPIDDebugString() {
     // A  helper function to keep track of the PID algorithm 
-    Serial.print("PID formula (P + I - D): ");
-    
-    printFloat(pTerm, 2);
-    Serial.print(" + ");
-    printFloat(iTerm, 2);
-    Serial.print(" - ");
-    printFloat(dTerm, 2);
-    Serial.print(" POWER: ");
-    printFloat(getHeatCycles(), 0);
-    Serial.print(" ");
-    
+    char buffer[80];
+    snprintf(buffer,80,"PID formula (P + I - D): %d.%02d + %d.%02d - %d.%02d POWER: %d ",
+             int(pTerm),to2d(pTerm),int(iTerm),to2d(iTerm),int(dTerm),to2d(pTerm),
+             int(getHeatCycles()));
+    Serial.write(buffer);
 }
 
 //-----------------------------------------------------------------HeaterControl
@@ -329,7 +338,6 @@ int myBaud = 9600;
 #define AUTO_PRINT_INTERVAL 200  // milliseconds
 #define MAX_DELTA  100
 #define MIN_DELTA  0.01
-#define PRINT_PLACES_AFTER_DECIMAL 2  // set to match MIN_DELTA
 
 
 int incomingByte = 0;
@@ -337,14 +345,13 @@ float delta = 1.0;
 boolean autoupdate;
 boolean printmode = 0;
 
+
 unsigned long lastUpdateTime = 0;
 void setupSerialInterface()  {
     Serial.begin(myBaud);
-    Serial.println("\nWelcome to the HPSS, the Hot Plate Solder System for Arduino");
-    Serial.println("\nBased on the BBCC, the Bare Bones Coffee Controller for Arduino");
-    Serial.println("Send back one or more characters to setup the controller.");
-    Serial.println("If this is your initial run, please enter 'R' to Reset the EEPROM.");
-    Serial.println("Enter '?' for help.  Here's to a great cup!");
+    Serial.write("\r\nWelcome to the HPSS, the Hot Plate Solder System for Arduino\r\n");
+    Serial.write("Send back one or more characters to setup the controller.\r\n");
+    Serial.write("Enter '?' for help.  Surface Mount or DIE!\r\n");
 }
 
 void printHelp() {
@@ -450,105 +457,42 @@ void updateSerialInterface() {
     }
 }
 
-void printStatus() { 
-    // A means for getting feedback on the current system status and controllable parameters
-    Serial.print(" SET TEMP:");
-    printFloat(getTargetTemp(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", CUR TEMP:");
-    printFloat(getLastTemp(),PRINT_PLACES_AFTER_DECIMAL);
-    
-    Serial.print(", GAINS p:");
-    printFloat(getP(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(" i:");
-    printFloat(getI(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(" d:");
-    printFloat(getD(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", Delta: ");
-    printFloat(delta,PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", Power: ");
-    printFloat((float)getHeatCycles(), 0);
-    
-    Serial.print("\r\n");
+int to2d(float f) {
+    return abs((int)((float)(f-((float)(int)f)) * 100.00));
 }
+
+void printStatus() { 
+    float tt,lt,p,i,d,hc;
+    tt=getTargetTemp();
+    lt=getLastTemp();
+    p=getP();
+    i=getI();
+    d=getD();
+    hc=getHeatCycles();
+    char printbuffer[100];
+    snprintf(printbuffer,100, "SET TEMP: %d.%02d, CUR TEMP: %d.%02d, GAINS p: %d.%02d" \
+                              " i: %d.%02d d: %d.%02d, Delta: %d.%02d, Power: %d \r\n",
+             int(tt),to2d(tt),int(lt),to2d(lt),int(p),to2d(p),int(i),to2d(i),int(d),to2d(d),
+             int(delta),to2d(delta),int(hc));
+    Serial.write((const char *)printbuffer);
+ }
 
 void printStatusForGraph() {
-    printFloat(getTargetTemp(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", ");
-    printFloat(getLastTemp(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", ");
-    printFloat(getP(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", ");
-    printFloat(getI(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", ");
-    printFloat(getD(),PRINT_PLACES_AFTER_DECIMAL);
-    Serial.print(", ");
-    printFloat((float)getHeatCycles(), 0);
-    Serial.println();
+    float tt,lt,p,i,d,hc;
+    tt=getTargetTemp();
+    lt=getLastTemp();
+    p=getP();
+    i=getI();
+    d=getD();
+    hc=getHeatCycles();
+    char printbuffer[100];
+    snprintf(printbuffer,100, "%d.%02d, %d.%02d, %d.%02d, %d.%02d, %d.%02d, %d.%02d,%d \r\n",
+             int(tt),to2d(tt),int(lt),to2d(lt),int(p),to2d(p),int(i),to2d(i),int(d),to2d(d),
+             int(delta),to2d(delta),int(hc));
+    Serial.write((const char *)printbuffer);
 }
 
-// printFloat prints out the float 'value' rounded to 'places' places after the decimal point
-void printFloat(float value, int places) {
-    // this is used to cast digits 
-    int digit;
-    float tens = 0.1;
-    int tenscount = 0;
-    int i;
-    float tempfloat = value;
-    
-    // make sure we round properly. this could use pow from <math.h>, but doesn't seem worth the import
-    // if this rounding step isn't here, the value  54.321 prints as 54.3209
-    
-    // calculate rounding term d:   0.5/pow(10,places)  
-    float d = 0.5;
-    if (value < 0)
-        d *= -1.0;
-    // divide by ten for each decimal place
-    for (i = 0; i < places; i++)
-        d/= 10.0;    
-    // this small addition, combined with truncation will round our values properly 
-    tempfloat +=  d;
-    
-    // first get value tens to be the large power of ten less than value
-    // tenscount isn't necessary but it would be useful if you wanted to know after this how many chars the number will take
-    
-    if (value < 0)
-        tempfloat *= -1.0;
-    while ((tens * 10.0) <= tempfloat) {
-        tens *= 10.0;
-        tenscount += 1;
-    }
-    
-    
-    // write out the negative if needed
-    if (value < 0)
-        Serial.print('-');
-    
-    if (tenscount == 0)
-        Serial.print(0, DEC);
-    
-    for (i=0; i< tenscount; i++) {
-        digit = (int) (tempfloat/tens);
-        Serial.print(digit, DEC);
-        tempfloat = tempfloat - ((float)digit * tens);
-        tens /= 10.0;
-    }
-    
-    // if no places after decimal, stop now and return
-    if (places <= 0)
-        return;
-    
-    // otherwise, write the point and continue on
-    Serial.print('.');  
-    
-    // now write out each decimal place by shifting digits one by one into the ones place and writing the truncated value
-    for (i = 0; i < places; i++) {
-        tempfloat *= 10.0; 
-        digit = (int) tempfloat;
-        Serial.print(digit,DEC);  
-        // once written, subtract off that digit
-        tempfloat = tempfloat - (float) digit; 
-    }
-}
+
 
 // temp - routines to read temperature strings from an IR 
 //        Temperature Sensor.
@@ -577,7 +521,8 @@ volatile int message_waiting = 0;
 
 unsigned long last_time = 0;
 unsigned int consectutive_timeouts = 0;
-
+// -127 is what the ds 1 wires return for an error. if not read 
+// this is what is returned.
 float temp= -127.0;
 float ambient;
 
@@ -588,10 +533,7 @@ int readCount = 0;
 float multiplier;
 void setupTempSensor() {
     pinMode(IR_CLK, INPUT);
-//    digitalWrite(IR_CLK,HIGH);
     pinMode(IR_DATA, INPUT);
-//    digitalWrite(IR_DATA,HIGH);
-    //attachInterrupt(1, readBit, FALLING);
     attachInterrupt(IR_INT, readBit, FALLING);
 }  
 
@@ -707,12 +649,6 @@ void loop()
     heatPower = updatePID(targetTemp, getFreshTemp());
     setHeatPowerPercentage(heatPower);
   }
-    /* safety */
-    //if (getFreshTemp() == -127.00) {
-    //    setHeatPowerPercentage(0);
-        //bark real loud!!!!
-    //    Serial.println("DBG: Sensor returned error");
-    //}
     if (consectutive_timeouts>20){
         setHeatPowerPercentage(0);
         //bark real loud!!!!

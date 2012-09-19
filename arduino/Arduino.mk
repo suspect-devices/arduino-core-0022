@@ -335,8 +335,8 @@ CPPFLAGS      = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -DARDUINO=$(ARDUINO_VERSION) \
 			-ffunction-sections -fdata-sections
 CFLAGS        = -std=gnu99
 CXXFLAGS      = -fno-exceptions
-ASFLAGS       = -mmcu=$(MCU) -I. -x assembler-with-cpp
-LDFLAGS       = -mmcu=$(MCU) -Wl,--gc-sections -Os
+ASFLAGS       = -mmcu=$(MCU) -I. -x assembler-with-cpp 
+LDFLAGS       = -mmcu=$(MCU) -Wl,--gc-sections -Os $(USER_LDFLAGS)
 
 # Expand and pick the first port
 # ARD_PORT      = $(firstword $(wildcard $(AVRDUDE_PORT)))
