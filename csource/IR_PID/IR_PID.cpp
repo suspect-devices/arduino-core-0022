@@ -56,6 +56,19 @@
 #include <avr/pgmspace.h>
 #include <stdio.h>
 #include "WProgram.h"
+#include <LiquidCrystal.h>
+
+
+static FILE uartout = {0} ;
+
+static int uart_putchar (char c, FILE *stream)
+{
+    Serial.write(c) ;
+    return 0 ;
+}
+
+
+LiquidCrystal lcd(14,15,16,17,18,19);
 
 void setup();
 void setTargetTemp(float t);
@@ -95,6 +108,7 @@ float thermo_temp;
 unsigned long lastPIDTime;  // most recent PID update time in ms 
 volatile unsigned long lastRead;
 volatile unsigned long epoch;
+volatile unsigned long targetSetAt;
 
 
 //-------------------------------------------------------------EEPROM float stuff
@@ -162,7 +176,7 @@ void setupPID(unsigned int padd, int iadd, int dadd) {
         setD(0.0);  // make sure to keep the decimal point on these values
         setTargetTemp(0.0); // target temp should be something safe.
     }
-        
+    
 }
 
 float getP() {
@@ -246,11 +260,9 @@ float updatePID(float targetTemp, float curTemp)
 
 void printPIDDebugString() {
     // A  helper function to keep track of the PID algorithm 
-    char buffer[80];
-    snprintf(buffer,80,"PID formula (P + I - D): %d.%02d + %d.%02d - %d.%02d POWER: %d ",
+    printf("PID formula (P + I - D): %d.%02d + %d.%02d - %d.%02d POWER: %d ",
              int(pTerm),to2d(pTerm),int(iTerm),to2d(iTerm),int(dTerm),to2d(pTerm),
              int(getHeatCycles()));
-    Serial.write(buffer);
 }
 
 //-----------------------------------------------------------------HeaterControl
@@ -348,25 +360,25 @@ boolean printmode = 0;
 
 unsigned long lastUpdateTime = 0;
 void setupSerialInterface()  {
-    Serial.begin(myBaud);
-    Serial.write("\r\nWelcome to the HPSS, the Hot Plate Solder System for Arduino\r\n");
-    Serial.write("Send back one or more characters to setup the controller.\r\n");
-    Serial.write("Enter '?' for help.  Surface Mount or DIE!\r\n");
+//    Serial.begin(myBaud);
+    printf_P(PSTR("\r\nWelcome to the HPSS, the Hot Plate Solder System for Arduino\r\n"));
+    printf_P(PSTR("Send back one or more characters to setup the controller.\r\n"));
+    printf_P(PSTR("Enter '?' for help.  Surface Mount or DIE!\r\n"));
 }
 
 void printHelp() {
-    Serial.println("Send these characters for control:");
-    Serial.println("<space> : print status now");
-    Serial.println("u : toggle periodic status update");
-    Serial.println("g : toggle update style between human and graphing mode");
-    Serial.println("R : reset/initialize PID gain values");
-    Serial.println("b : print PID debug values");
-    Serial.println("? : print help");  
-    Serial.println("+/- : adjust delta by a factor of ten");
-    Serial.println("P/p : up/down adjust p gain by delta");
-    Serial.println("I/i : up/down adjust i gain by delta");
-    Serial.println("D/d : up/down adjust d gain by delta");
-    Serial.println("T/t : up/down adjust set temp by delta");
+    printf_P(PSTR("Send these characters for control:\r\n"));
+    printf_P(PSTR("<space> : print status now\r\n"));
+    printf_P(PSTR("u : toggle periodic status update\r\n"));
+    printf_P(PSTR("g : toggle update style between human and graphing mode\r\n"));
+    printf_P(PSTR("R : reset/initialize PID gain values\r\n"));
+    printf_P(PSTR("b : print PID debug values\r\n"));
+    printf_P(PSTR("? : print help\r\n"));  
+    printf_P(PSTR("+/- : adjust delta by a factor of ten\r\n"));
+    printf_P(PSTR("P/p : up/down adjust p gain by delta\r\n"));
+    printf_P(PSTR("I/i : up/down adjust i gain by delta\r\n"));
+    printf_P(PSTR("D/d : up/down adjust d gain by delta\r\n"));
+    printf_P(PSTR("T/t : up/down adjust set temp by delta\r\n"));
     
     
 }
@@ -436,7 +448,7 @@ void updateSerialInterface() {
         }
         if (incomingByte == 'b') {
             printPIDDebugString(); 
-            Serial.println();
+            printf("\r\n");
         }
     }
     
@@ -468,14 +480,11 @@ void printStatus() {
     p=getP();
     i=getI();
     d=getD();
-    hc=getHeatCycles();
-    char printbuffer[100];
-    snprintf(printbuffer,100, "SET TEMP: %d.%02d, CUR TEMP: %d.%02d, GAINS p: %d.%02d" \
-                              " i: %d.%02d d: %d.%02d, Delta: %d.%02d, Power: %d \r\n",
+    printf("SET TEMP: %d.%02d, CUR TEMP: %d.%02d, GAINS p: %d.%02d" \
+             " i: %d.%02d d: %d.%02d, Delta: %d.%02d, Power: %d \r\n",
              int(tt),to2d(tt),int(lt),to2d(lt),int(p),to2d(p),int(i),to2d(i),int(d),to2d(d),
-             int(delta),to2d(delta),int(hc));
-    Serial.write((const char *)printbuffer);
- }
+             int(delta),to2d(delta),int(getHeatCycles()));
+}
 
 void printStatusForGraph() {
     float tt,lt,p,i,d,hc;
@@ -485,16 +494,14 @@ void printStatusForGraph() {
     i=getI();
     d=getD();
     hc=getHeatCycles();
-    char printbuffer[100];
-    snprintf(printbuffer,100, "%d.%02d, %d.%02d, %d.%02d, %d.%02d, %d.%02d, %d.%02d,%d \r\n",
-             int(tt),to2d(tt),int(lt),to2d(lt),int(p),to2d(p),int(i),to2d(i),int(d),to2d(d),
-             int(delta),to2d(delta),int(hc));
-    Serial.write((const char *)printbuffer);
+    printf("%d.%02d, %d.%02d, %d.%02d, %d.%02d, %d.%02d, %d\n",
+             int(tt),to2d(tt),int(lt),to2d(lt),int(p),to2d(p),int(i),to2d(i),int(d),to2d(d),int(hc));
 }
 
 
 
-// temp - routines to read temperature strings from an IR 
+//------------------------------------------------------------Temp Routines
+//temp - routines to read temperature strings from an IR 
 //        Temperature Sensor.
 // Created by Scott Dixon January, 2010.
 // Based on documentation from 
@@ -603,60 +610,89 @@ float getLastTemp() {
     
 }
 
+void updateDisplay(){
+    char chunk[20];
+    lcd.setCursor(5,1);
+    snprintf(chunk,19,"%2ld:%.02ld",(epoch-targetSetAt)/60L,(epoch-targetSetAt)%60L);
+    lcd.print(chunk);
+    lcd.setCursor(11,1);
+    snprintf(chunk,19,"G:% 4d.%2.02d",int(getTargetTemp()),to2d(getTargetTemp()));
+    lcd.print(chunk);
+    lcd.setCursor(11,2);
+    snprintf(chunk,19,"T:% 4d.%2.02d",int(getLastTemp()),to2d(getLastTemp()));
+    lcd.print(chunk);
+    lcd.setCursor(11,0);
+    snprintf(chunk,19,"%6ld:%.02ld",epoch/60L,epoch%60L);
+    lcd.print(chunk);
+    lcd.setCursor(13,3);
+    snprintf(chunk,18,"S:% 4d",int(getHeatCycles()));
+    lcd.print(chunk);
+}
+
 //-----------------------------------------------------main (Setup and loop)
 
 
 void setup()
 {
-
-  setupPID(PGAIN_ADR, IGAIN_ADR, DGAIN_ADR ); // Send addresses to the PID module 
-  targetTemp = readFloat(TEMP_SETTING_ADR); // from EEPROM. load the saved value
-  lastPIDTime = millis();
-  // module setup calls
-  setupHeater();
-  setupSerialInterface();
-  setupTempSensor();
+    lcd.begin(16, 4);
+    lcd.setCursor(0,0);
+    lcd.print("hotplate!");
+    
+    Serial.begin(9600);
+    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
+    stdout = &uartout ;
+    
+    
+    setupPID(PGAIN_ADR, IGAIN_ADR, DGAIN_ADR ); // Send addresses to the PID module 
+    
+    targetTemp = readFloat(TEMP_SETTING_ADR); // from EEPROM. load the saved value
+    lastPIDTime = millis();
+    // module setup calls
+    setupHeater();
+    setupSerialInterface();
+    setupTempSensor();
     epoch=millis()/1000L;
 }
 
 void setTargetTemp(float t) {
-  targetTemp = t;
-  writeFloat(t, TEMP_SETTING_ADR);
+    targetTemp = t;
+    writeFloat(t, TEMP_SETTING_ADR);
+    targetSetAt=epoch;
 }
 
 float getTargetTemp() {
-  return targetTemp;
+    return targetTemp;
 }
 
 
 void loop()
 { 
-  epoch=millis()/1000L;
-  // this call interprets characters from the serial port
-  // its a very basic control to allow adjustment of gain values, and set temp
-  updateSerialInterface(); 
-  updateTempSensor();
-  
-  // every second, udpate the current heat control, and print out current status
-
-  // This checks for rollover with millis()
-  if (millis() < lastPIDTime) {
-    lastPIDTime = 0;
-  }
-
-  if ((millis() - lastPIDTime) > PID_UPDATE_INTERVAL) {
-    lastPIDTime +=  PID_UPDATE_INTERVAL;
-    heatPower = updatePID(targetTemp, getFreshTemp());
-    setHeatPowerPercentage(heatPower);
-  }
-    if (consectutive_timeouts>20){
-        setHeatPowerPercentage(0);
-        //bark real loud!!!!
-        //Serial.println("DBG: missing overriding temp");
+    epoch=millis()/1000L;
+    // this call interprets characters from the serial port
+    // its a very basic control to allow adjustment of gain values, and set temp
+    updateSerialInterface(); 
+    updateDisplay();
+    updateTempSensor();
+    
+    // every second, udpate the current heat control, and print out current status
+    
+    // This checks for rollover with millis()
+    if (millis() < lastPIDTime) {
+        lastPIDTime = 0;
     }
     
-  updateHeater();
-
+    if ((millis() - lastPIDTime) > PID_UPDATE_INTERVAL) {
+        lastPIDTime +=  PID_UPDATE_INTERVAL;
+        heatPower = updatePID(targetTemp, getFreshTemp());
+        setHeatPowerPercentage(heatPower);
+    }
+    if (consectutive_timeouts>20){
+        setHeatPowerPercentage(0);
+        consectutive_timeouts=0;
+    }
+    
+    updateHeater();
+    
 }
 
 
